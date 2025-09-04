@@ -1,104 +1,93 @@
 import os
+import torch
 import numpy as np
 import pandas as pd
-import torch
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
+from torch.utils.data import Dataset
 from PIL import Image
-import pydicom
-import matplotlib.pyplot as plt
 
-# Set random seeds for reproducibility
-torch.manual_seed(42)
-np.random.seed(42)
+# This single dataset file will serve both critic training scripts.
 
-class MIMIC_CXR_Dataset(Dataset):
-    def __init__(self, root_dir, csv_file, transform=None, img_size=256):
-        """
-        Args:
-            root_dir (string): Directory with all the DICOM images
-            csv_file (string): Path to the csv file with annotations
-            transform (callable, optional): Optional transform to be applied
-            img_size (int): Target image size for resizing
-        """
-        self.df = pd.read_csv(csv_file)
-        self.root_dir = root_dir
+class MIMICCXRClassifierDataset(Dataset):
+    """
+    Dataset for the Cdiag (classification) task.
+    - Loads a JPG image.
+    - Converts it to RGB (as required by ResNet).
+    - Returns the image and its corresponding Pneumonia label.
+    """
+    def __init__(self, df, image_dir, transform=None):
+        self.df = df
+        self.image_dir = image_dir
         self.transform = transform
-        self.img_size = img_size
-        
-        # Precompute paths
-        self.image_paths = []
-        for idx in range(len(self.df)):
-            subject_id = str(self.df.iloc[idx]['subject_id'])
-            study_id = str(self.df.iloc[idx]['study_id'])
-            dicom_id = str(self.df.iloc[idx]['dicom_id'])
-            path = os.path.join(root_dir, f'p{subject_id[:2]}', f'p{subject_id}', f's{study_id}', f'{dicom_id}.dcm')
-            self.image_paths.append(path)
-            
-        # Convert labels to numerical values
-        self.labels = self.df['Pneumonia'].astype(int).values
-        self.protected_attrs = pd.get_dummies(self.df['Race']).values  # One-hot encoding
-        
+
     def __len__(self):
         return len(self.df)
-    
+
     def __getitem__(self, idx):
-        # Load DICOM image
-        dicom_path = self.image_paths[idx]
-        dicom = pydicom.dcmread(dicom_path)
-        image = dicom.pixel_array
-        
-        # Convert to PIL Image and resize
-        image = Image.fromarray(image).convert('L')  # Convert to grayscale
-        image = image.resize((self.img_size, self.img_size))
-        
-        # Normalize to [-1, 1] range
-        image = np.array(image, dtype=np.float32)
-        image = (image - image.min()) / (image.max() - image.min()) * 2 - 1
-        
-        # Convert to 3-channel (for ResNet compatibility)
-        image = np.stack([image]*3, axis=0)
-        
-        label = self.labels[idx]
-        protected_attr = self.protected_attrs[idx]
-        
+        row = self.df.iloc[idx]
+        subject_id = str(row['subject_id'])
+        study_id = str(row['study_id'])
+        dicom_id = row['dicom_id']
+
+        # Construct the path to the JPG image
+        image_path = os.path.join(
+            self.image_dir, f'p{subject_id[:2]}', f'p{subject_id}', f's{study_id}', f'{dicom_id}.jpg'
+        )
+
+        # Load image and convert to a numpy array in RGB format
+        image = Image.open(image_path).convert("RGB")
+        image = np.array(image)
+
+        # Apply augmentations
         if self.transform:
-            image = self.transform(image)
-            
-        return {
-            'image': torch.tensor(image, dtype=torch.float32),
-            'label': torch.tensor(label, dtype=torch.long),
-            'protected_attr': torch.tensor(protected_attr, dtype=torch.float32)
-        }
+            augmented = self.transform(image=image)
+            image = augmented['image']
 
-# Define transforms
-transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomAffine(degrees=5, translate=(0.05, 0.05)),
-    transforms.ToTensor()
-])
+        # Get the label
+        label = torch.tensor(row['Pneumonia'], dtype=torch.float32)
 
-# Example usage
-if __name__ == '__main__':
-    dataset = MIMIC_CXR_Dataset(
-        root_dir='/path/to/mimic-cxr-jpg/2.0.0/files',
-        csv_file='/path/to/mimic-cxr-2.0.0-chexpert.csv',
-        transform=transform
-    )
-    
-    dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
-    
-    # Visualize first batch
-    batch = next(iter(dataloader))
-    images = batch['image']
-    labels = batch['label']
-    protected = batch['protected_attr']
-    
-    fig, axes = plt.subplots(2, 4, figsize=(15, 8))
-    for i, ax in enumerate(axes.flat):
-        ax.imshow(images[i].permute(1, 2, 0).numpy() * 0.5 + 0.5, cmap='gray')
-        ax.set_title(f"Label: {labels[i].item()}\nRace: {protected[i].argmax().item()}")
-        ax.axis('off')
-    plt.tight_layout()
-    plt.show()
+        return image, label.unsqueeze(0)
+
+
+class MIMICXRSegmentationDataset(Dataset):
+    """
+    Dataset for the Cseg (segmentation) task.
+    - Loads a JPG image (as grayscale).
+    - Loads its corresponding pre-generated PNG mask.
+    - Returns both the image and the mask.
+    """
+    def __init__(self, df, image_dir, mask_dir, transform=None):
+        self.df = df
+        self.image_dir = image_dir
+        self.mask_dir = mask_dir
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        subject_id = str(row['subject_id'])
+        study_id = str(row['study_id'])
+        dicom_id = row['dicom_id']
+
+        # Construct paths for both image and mask
+        image_path = os.path.join(
+            self.image_dir, f'p{subject_id[:2]}', f'p{subject_id}', f's{study_id}', f'{dicom_id}.jpg'
+        )
+        mask_path = os.path.join(self.mask_dir, f"{dicom_id}.png")
+
+        # Load image and mask as grayscale numpy arrays
+        image = np.array(Image.open(image_path).convert("L"), dtype=np.float32)
+        mask = np.array(Image.open(mask_path).convert("L"), dtype=np.float32)
+
+        # Normalize mask values from [0, 255] to [0.0, 1.0]
+        mask[mask == 255.0] = 1.0
+
+        # Apply augmentations (Albumentations will transform both identically)
+        if self.transform:
+            augmented = self.transform(image=image, mask=mask)
+            image = augmented['image']
+            mask = augmented['mask']
+
+        # Add a channel dimension for the mask for consistency
+        return image, mask.unsqueeze(0)
