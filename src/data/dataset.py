@@ -51,7 +51,7 @@ class MIMICCXRClassifierDataset(Dataset):
 class MIMICXRSegmentationDataset(Dataset):
     """
     Dataset for the Cseg (segmentation) task.
-    - Loads a JPG image (as grayscale).
+    - Loads a JPG image (as 3-channel RGB). <--- UPDATED
     - Loads its corresponding pre-generated PNG mask.
     - Returns both the image and the mask.
     """
@@ -70,20 +70,25 @@ class MIMICXRSegmentationDataset(Dataset):
         study_id = str(row['study_id'])
         dicom_id = row['dicom_id']
 
-        # Construct paths for both image and mask
         image_path = os.path.join(
             self.image_dir, f'p{subject_id[:2]}', f'p{subject_id}', f's{study_id}', f'{dicom_id}.jpg'
         )
         mask_path = os.path.join(self.mask_dir, f"{dicom_id}.png")
 
-        # Load image and mask as grayscale numpy arrays
-        image = np.array(Image.open(image_path).convert("L"), dtype=np.float32)
+        # --- KEY CHANGE ---
+        # Load image and convert to RGB to match the model's expected input channels.
+        image = np.array(Image.open(image_path).convert("RGB"), dtype=np.float32)
+
+        # Load mask as grayscale
         mask = np.array(Image.open(mask_path).convert("L"), dtype=np.float32)
+
+        # RESIZE THE IMAGE to match the mask size (256×256) BEFORE augmentation
+        image = np.array(Image.fromarray(image.astype(np.uint8)).resize((256, 256), Image.BILINEAR))
 
         # Normalize mask values from [0, 255] to [0.0, 1.0]
         mask[mask == 255.0] = 1.0
 
-        # Apply augmentations (Albumentations will transform both identically)
+        # Apply augmentations (Albumentations will now see matching input sizes from the Resize transform)
         if self.transform:
             augmented = self.transform(image=image, mask=mask)
             image = augmented['image']

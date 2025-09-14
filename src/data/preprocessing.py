@@ -36,8 +36,15 @@ except FileNotFoundError as e:
 
 # Clean CheXpert labels: We need a binary label for Pneumonia.
 # The labeler uses 1.0 (Positive), -1.0 (Uncertain), 0.0 (Negative).
-# We will map Positive to 1 and treat Uncertain/Negative as 0.
-chexpert_df['Pneumonia'] = chexpert_df['Pneumonia'].replace(-1.0, 0.0).fillna(0).astype(int)
+# We will ONLY use definitive Positive (1) and Negative (0) cases.
+# We FILTER OUT (remove) all Uncertain cases (-1.0).
+
+print(f"CheXpert data shape before filtering: {chexpert_df.shape}")
+# Keep only rows where the Pneumonia label is definitively 0 or 1
+chexpert_df = chexpert_df[chexpert_df['Pneumonia'].isin([0.0, 1.0])]
+# Convert the remaining labels to integer
+chexpert_df['Pneumonia'] = chexpert_df['Pneumonia'].astype(int)
+print(f"CheXpert data shape after removing uncertain cases: {chexpert_df.shape}")
 
 # Clean Race column: The 'race' column is very detailed. For a fairness
 # analysis with a small dataset, it's better to group them into broader categories.
