@@ -96,3 +96,45 @@ class MIMICXRSegmentationDataset(Dataset):
 
         # Add a channel dimension for the mask for consistency
         return image, mask.unsqueeze(0)
+
+class MIMICCXR_GANDataset(Dataset):
+    """
+    Dataset for the main GAN training.
+    - Loads a JPG image (as grayscale).
+    - Returns the image, its Pneumonia label, and the one-hot encoded race group.
+    """
+    def __init__(self, df, image_dir, transform=None):
+        self.df = df
+        self.image_dir = image_dir
+        self.transform = transform
+
+        # Pre-process sensitive attributes
+        self.df['race_group'] = self.df['race_group'].astype('category')
+        self.race_categories = self.df['race_group'].cat.categories
+        self.one_hot_races = pd.get_dummies(self.df['race_group'])
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        subject_id = str(row['subject_id'])
+        study_id = str(row['study_id'])
+        dicom_id = row['dicom_id']
+
+        image_path = os.path.join(
+            self.image_dir, f'p{subject_id[:2]}', f'p{subject_id}', f's{study_id}', f'{dicom_id}.jpg'
+        )
+
+        # Load the image and convert to "RGB"
+        image = Image.open(image_path).convert("RGB") # <-- CHANGE "L" to "RGB"
+        image = np.array(image, dtype=np.float32)
+
+        if self.transform:
+            augmented = self.transform(image=image)
+            image = augmented['image']
+
+        label = torch.tensor(row['Pneumonia'], dtype=torch.float32)
+        race = torch.tensor(self.one_hot_races.iloc[idx].values, dtype=torch.float32)
+
+        return image, label, race
