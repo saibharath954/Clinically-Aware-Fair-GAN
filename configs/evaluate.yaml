@@ -1,0 +1,27 @@
+# Configuration for the final evaluation (Phase D)
+
+# --- Paths ---
+# Path to the trained generator from Phase C
+GENERATOR_CHECKPOINT: "outputs/gan/netG_epoch_200.pth" #<-- IMPORTANT: Update this to your best generator checkpoint
+REAL_DATA_CSV_TEST: "data/splits/test.csv"
+IMAGE_DIR_REAL: "data/mimic-cxr-jpg-2.0.0/files/"
+
+# --- Synthetic Data Generation ---
+SYNTHETIC_DATA_DIR: "data/synthetic_images/"
+SYNTHETIC_CSV_PATH: "data/synthetic_images/labels.csv"
+NUM_SYNTHETIC_IMAGES: 2000 # Generate a dataset of the same size as our original subset
+GENERATION_BATCH_SIZE: 32
+
+# --- Downstream Classifier Training ---
+CLASSIFIER_OUTPUT_DIR: "outputs/downstream_classifier/"
+CLASSIFIER_MODEL_NAME: "best_synth_trained_classifier.pth"
+IMG_SIZE: 256
+BATCH_SIZE: 32
+EPOCHS: 15
+LEARNING_RATE: 0.0001
+
+# --- System ---
+DEVICE: "cuda"
+NUM_WORKERS: 2
+LATENT_DIM: 128
+CHANNELS: 3
