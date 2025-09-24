@@ -2,19 +2,29 @@
 
 This repository contains the official PyTorch implementation for the paper "CAF-GAN: A Clinically-Aware and Fair Generative Adversarial Network." The project focuses on generating realistic, high-fidelity medical images (specifically chest X-rays) that are also fair across different demographic groups and clinically plausible.
 
-![GitHub Banner](https://user-images.githubusercontent.com/your_github_id/your_image_id.png)  ## 📜 Table of Contents
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+[![PyTorch](https://img.shields.io/badge/PyTorch-%3E%3D1.10-red.svg)](https://pytorch.org/)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
+---
+
+## 📜 Table of Contents
 - [Introduction](#-introduction)
 - [Project Objectives](#-project-objectives)
 - [Architecture Overview](#-architecture-overview)
-- [Repository Structure](#-repository-structure)
-- [Setup and Installation](#-setup-and-installation)
-- [Dataset Preparation](#-dataset-preparation)
-- [Training](#-training)
-- [Evaluation](#-evaluation)
-- [Results](#-results)
-- [Citation](#-citation)
-- [License](#-license)
-- [Acknowledgements](#-acknowledgements)
+- [Project Structure](#-project-structure)  
+- [Quick Start](#-quick-start)  
+  - [Prerequisites](#prerequisites)  
+  - [Installation](#installation)  
+  - [Dataset Preparation](#dataset-preparation)  
+  - [Training](#training)  
+  - [Evaluation](#evaluation)  
+- [Results (Example)](#results-example)  
+- [Citation](#citation)  
+- [License](#license)  
+- [Acknowledgements & Contact](#acknowledgements--contact)
+
+---
 
 ## 📖 Introduction
 
@@ -22,12 +32,16 @@ Generative Adversarial Networks (GANs) have shown great promise in synthesizing 
 
 This project implements **CAF-GAN**, a novel framework that introduces two specialized "critic" models to guide the generator. These critics ensure that the generated images are not only realistic but also fair from a diagnostic standpoint and anatomically correct.
 
+---
+
 ## 🎯 Project Objectives
 
 1.  **High Fidelity:** Generate realistic chest X-ray images that are indistinguishable from real ones.
 2.  **Fairness:** Mitigate algorithmic bias by ensuring a downstream diagnostic model performs equitably across different protected demographic groups.
 3.  **Clinical Plausibility:** Enforce anatomical correctness in the generated images, such as realistic lung shapes and sizes.
 4.  **Downstream Utility:** Produce synthetic data that can be used to train high-performing, fair, and robust downstream classifiers.
+
+---
 
 ## 🏗️ Architecture Overview
 
@@ -40,129 +54,185 @@ The total generator loss is a weighted sum of the adversarial loss, the fairness
 
 $$ L_G^{\text{total}} = L_{\text{WGAN}} + \lambda_{\text{fair}} L_{\text{fairness}} + \lambda_{\text{clinic}} L_{\text{clinical}} $$
 
-## 📂 Repository Structure
+---
+
+
+## 📂 Project Structure
+```
 
 caf-gan-mimic-cxr/
 │
-├── data/              # Raw and processed data (ignored by git)
-├── configs/           # Configuration files for training and data
-├── notebooks/         # Jupyter notebooks for exploration and testing
-├── outputs/           # Saved model checkpoints and generated images (ignored by git)
-├── scripts/           # Helper scripts (e.g., environment setup)
+├── data/ # Raw and processed data (ignored by git)
+├── configs/ # YAML config files for training and experiments
+├── notebooks/ # Notebooks for exploration & tests
+├── outputs/ # Saved checkpoints & generated images (ignored by git)
+├── scripts/ # Helper scripts (download / utils)
 │
 ├── src/
-│   ├── data/          # Data loading (Dataset) and preprocessing scripts
-│   ├── models/        # Model definitions (Generator, Discriminator, Critics)
-│   ├── training/      # Main training scripts for critics and the GAN
-│   └── evaluation/    # Scripts for evaluating fairness and utility
+│ ├── data/ # Dataset classes & preprocessing
+│ ├── models/ # Generator, Discriminator, Critics
+│ ├── training/ # train_gan.py, train_cdiag.py, train_cseg.py
+│ └── evaluation/ # evaluation scripts & metrics
 │
-├── requirements.txt   # Python dependencies
-├── README.md          # This file
+├── requirements.txt
+├── README.md
 └── .gitignore
 
+````
 
-## ⚙️ Setup and Installation
+---
 
-Follow these steps to set up the environment and install the necessary dependencies.
+## ⚙️ Quick Start
 
-1. Clone the repository:
-git clone [https://github.com/saibharath954/Clinically-Aware-Fair-GAN.git](https://github.com/saibharath954/Clinically-Aware-Fair-GAN.git)
+### Prerequisites
+
+- Linux / macOS (recommended). Works on Windows with WSL.
+- Python 3.8+  
+- CUDA-enabled GPU (recommended) and compatible PyTorch build.
+
+### Installation
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/saibharath954/Clinically-Aware-Fair-GAN.git
 cd Clinically-Aware-Fair-GAN
 
-2. Create a Python Virtual Environment:
-It's highly recommended to use a virtual environment (e.g., venv or conda).
-
+# 2. Create virtual environment (venv example)
 python3 -m venv venv
 source venv/bin/activate
 
-3. Install Dependencies:
-Install all required packages using the requirements.txt file.
-
+# 3. Install dependencies
 pip install -r requirements.txt
+````
 
-💾 Dataset Preparation
-This project uses the MIMIC-CXR dataset. Due to its protected nature, you must first gain credentialed access on PhysioNet.
+> If you prefer `conda`:
+>
+> ```bash
+> conda create -n cafgan python=3.9 -y
+> conda activate cafgan
+> pip install -r requirements.txt
+> ```
 
-1. Download Data:
-Follow the instructions on PhysioNet to download the DICOM images and the relevant metadata files (cxr-record-list.csv, patients.csv, admissions.csv). You will also need the pre-computed CheXpert labels from the MIMIC-CXR-JPG dataset (mimic-cxr-2.0.0-chexpert.csv).
+---
 
-2. Organize Data:
-Place the downloaded files into the data/ directory according to the structure expected by the preprocessing script.
+## 💾 Dataset Preparation
 
-3. Run Preprocessing:
-First, create a final metadata file that contains all the necessary information (image paths, labels, and demographic data). Then, download the required subset of images.
+This project uses the **MIMIC-CXR** dataset (or MIMIC-CXR-JPG). MIMIC-CXR is protected and requires credentialed access via PhysioNet.
 
-# Step 1: Create the master CSV file for a 2,000 image subset
-python src/data/preprocessing.py
+1. **Get access** — create an account on [PhysioNet](https://physionet.org/) and request access to MIMIC-CXR.
 
-# Step 2: Generate the list of image URLs to download
-python src/data/generate_download_list.py # Assuming you create this script
+2. **Download required files** (DICOM/JPG + metadata + precomputed CheXpert labels). Example files you might need:
 
-# Step 3: Run the download script
+   * `mimic-cxr-2.0.0-chexpert.csv`
+   * `cxr-record-list.csv`
+   * patient/demographic csvs as required
+
+3. **Organize & preprocess**
+
+Place raw files in `data/` then run preprocessing scripts to create a consolidated metadata CSV and prepare image lists.
+
+```bash
+# Example pipeline (adapt to your scripts/configs)
+python src/data/preprocessing.py        # produces master CSV for your subset
+python src/data/generate_download_list.py
 bash scripts/download_images.sh
+python src/data/generate_masks.py       # generate segmentation masks (for Cseg)
+```
 
-4. Generate Segmentation Masks:
-After downloading the images, generate the pseudo-ground-truth masks for the clinical critic.
+> **Note:** Update paths and config values in `configs/*.yaml` before running scripts.
 
-python src/data/generate_masks.py
+---
 
-🚀 Training
-The training process is divided into three main stages. All training scripts can be configured using the YAML files in the configs/ directory.
+## 🚀 Training
 
-1. Pre-train the Fairness Critic (Cdiag):
-This trains the diagnostic classifier on the real data.
+All training scripts accept a `--config` YAML path (see `configs/`).
 
+### 1) Train Fairness Critic (Cdiag)
+
+```bash
 python src/training/train_cdiag.py --config configs/train_cdiag.yaml
-The best model will be saved in the outputs/cdiag/ directory.
+# outputs saved to outputs/cdiag/
+```
 
-2. Pre-train the Clinical Critic (Cseg):
-This trains the segmentation model on the real data and the generated masks.
+### 2) Train Clinical Critic (Cseg)
 
+```bash
 python src/training/train_cseg.py --config configs/train_cseg.yaml
-The best model will be saved in the outputs/cseg/ directory.
+# outputs saved to outputs/cseg/
+```
 
-3. Train the CAF-GAN:
-This is the main training script, which loads the frozen critics and trains the generator and discriminator.
+### 3) Train CAF-GAN
 
+```bash
 python src/training/train_gan.py --config configs/train_gan.yaml
-Checkpoints and sample generated images will be saved periodically to outputs/gan/.
+# checkpoints & generated samples -> outputs/gan/
+```
 
-📊 Evaluation
-After training the CAF-GAN, run the evaluation script to assess its performance. The script will:
+Common config options you may tune:
 
-Generate a synthetic dataset using the trained generator.
+* learning rates, batch size, image resolution
+* adversarial loss weights, lambda\_fair, lambda\_clinic
+* critic pre-trained checkpoint paths
 
-Train a new downstream classifier from scratch on this synthetic data.
+---
 
-Evaluate the synthetically-trained classifier on the real test set for both utility (AUC, F1-Score) and fairness (Equal Opportunity Difference).
+## 📊 Evaluation
 
+After training a GAN checkpoint, evaluate synthetic data utility & fairness:
+
+```bash
 python src/evaluation/evaluate.py --gan_checkpoint outputs/gan/best_generator.pth
+```
 
-📈 Results
+Evaluation pipeline (high-level):
 
-Example Table: Fairness and Utility Comparison
+1. Generate synthetic dataset with trained generator.
+2. Train a downstream classifier on synthetic data (from scratch).
+3. Evaluate on held-out real test set for utility (AUC, F1) and fairness (e.g., Equal Opportunity Difference).
 
-Model	Test AUC	Equal Opportunity Difference
-Baseline (Real Data)	0.85	0.15
-Standard WGAN-GP	0.82	0.12
-CAF-GAN (Ours)	0.84	0.04
+---
 
-©️ Citation
-If you use this code or the ideas from this project in your research, please cite the original paper:
-<!-- Code snippet
+## 📈 Results (Example)
 
+| Model                | Test AUC | Equal Opportunity Difference |
+| -------------------- | -------: | ---------------------------: |
+| Baseline (Real Data) |     0.85 |                         0.15 |
+| Standard WGAN-GP     |     0.82 |                         0.12 |
+| **CAF-GAN (Ours)**   | **0.84** |                     **0.04** |
+
+> These are illustrative numbers — run experiments on your dataset/config to reproduce results.
+
+---
+
+## 📜 Citation
+
+If you use this code or ideas from this project, please cite:
+
+<!-- ```bibtex
 @article{your_paper_citation,
   title={CAF-GAN: A Clinically-Aware and Fair Generative Adversarial Network},
-  author={Your Name, et al.},
-  journal={Journal or Conference Name},
-  year={2025}
-} -->
+  author={Sai Bharath Pediredla},
+  journal={Conference or Journal Name},
+  year={2025},
+  url={https://arxiv.org/abs/xxxx.xxxxx}  # replace with actual link if available
+}
+``` -->
 
-📜 License
-This project is licensed under the MIT License. See the LICENSE file for more details.
+---
 
-🙏 Acknowledgements
+## 🧾 License
 
-This work relies on the publicly available MIMIC-CXR Dataset.
-I thank the authors of the CheXpert labeler and Chest X-ray (LungSegmentation) for their valuable tools.
+This project is released under the **MIT License**. See [LICENSE](./LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgements & Contact
+
+* This work uses the **MIMIC-CXR** dataset (PhysioNet).
+* Thanks to the authors of **CheXpert** labeler and available lung segmentation tools that the project builds upon.
+* If you have questions or want to collaborate, contact: **saibharath1675@gmail.com** 
+
+---
+
+Thank you for checking out **CAF-GAN** — feel free to open issues or PRs if you find bugs, want features, or want to reproduce/extend experiments. 🚀
 
